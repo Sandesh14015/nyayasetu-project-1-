@@ -1,0 +1,39 @@
+# compiled output
+dist/
+tmp/
+out-tsc/
+*.tsbuildinfo
+
+# dependencies
+node_modules/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# system
+.DS_Store
+Thumbs.db
+
+# logs
+npm-debug.log*
+yarn-error.log*
+
+# env — never commit secrets
+.env
+.env.local
+.env.production
+
+# Replit-specific (not needed in GitHub)
+.cache/
+.local/
+.replit
+replit.nix
+
+# pnpm
+pnpm-lock.yaml

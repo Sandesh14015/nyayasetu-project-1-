@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "_kfscIGhX-QZYVmIx8dhv"
+uri = "file://nyayasetu-project.zip"
+type = "unspecified"
+title = "NyayaSetu AI — Full Project"

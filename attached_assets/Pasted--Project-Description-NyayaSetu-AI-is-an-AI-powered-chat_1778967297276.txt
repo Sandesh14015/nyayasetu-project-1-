@@ -1,0 +1,96 @@
+
+
+📌 Project Description
+
+NyayaSetu AI is an AI-powered chatbot and interactive dashboard developed for the Department of Justice to enhance accessibility, transparency, and efficiency in judicial services. The system acts as a virtual legal assistant that enables users to easily access information related to court procedures, case status, legal aid, and various eServices such as eFiling and ePay.
+
+The platform integrates multiple judicial resources into a single unified interface, allowing users to interact through natural language queries. It provides real-time assistance for services like checking case status, understanding legal procedures, accessing National Judicial Data Grid (NJDG) insights, and locating nearby courts or legal aid centers.
+
+Unlike traditional chatbots, NyayaSetu AI goes beyond static responses by offering guided workflows, intelligent suggestions, and simplified explanations of complex legal processes. The system is designed to support multilingual interaction, voice input, and continuous learning through user feedback, ensuring improved performance over time.
+
+By bridging the gap between citizens and the judicial system, NyayaSetu AI promotes access to justice, especially for individuals with limited legal knowledge or resources. The solution is scalable, user-friendly, and aligned with ongoing digital initiatives such as the eCourts Project and Tele-Law services.
+
+🎯 Objectives
+To provide a single access point for judicial services
+To simplify complex legal procedures using AI
+To enable users to check case status and court data easily
+To assist citizens in accessing legal aid and government services
+To improve user experience through interactive and guided assistance
+⚙️ Key Features
+💬 AI-powered chatbot for legal queries
+⚖️ live Case status tracking system 
+📊 NJDG data visualization (pending cases, court stats)
+📄 Guidance for eFiling, ePay, and legal procedures
+🆘 Legal aid and Tele-Law service support
+🎤 Voice-enabled interaction (optional enhancement)
+📍 Location-based services (courts, police stations)
+🧠 Learning system based on user feedback
+i want the feacture were all the data shown in the app is live and auto updating 
+🧩 Technology Stack
+Frontend: HTML, CSS, JavaScript / React
+Backend: Node.js / Java
+Database: MongoDB / MySQL
+AI/NLP: OpenAI API / Dialogflow (for chatbot)
+
+gather all the information about the cases from here
+Case status / hearings → eCourts Services
+Pending cases / court statistics → National Judicial Data Grid (NJDG)
+Department information and schemes → Department of Justice (India)
+eFiling help → eFiling Services
+Free legal help → Tele-Law Services
+Judgments and court orders → eCourts Judgments & Orders
+
+Where your graph data comes from
+
+For your PS, likely sources are:
+
+National Judicial Data Grid (NJDG)
+Department of Justice
+eCourts Services
+
+Examples:
+
+Pending cases
+Judge vacancies
+Court statistics
+Fast track court data
+🚀 Architecture
+NJDG / APIs / Dataset
+          ↓
+Backend (Node.js / Java)
+          ↓
+Database / Processing
+          ↓
+Chart Library
+          ↓
+Interactive Dashboard
+📊 Make graphs interactive
+
+Use chart libraries:
+
+Chart.js → easiest
+Recharts → React
+Apache ECharts → advanced
+
+Interactive features:
+✅ Hover tooltips
+✅ Zoom
+✅ Filters by state
+✅ Date ranges
+✅ Click graph → open detailed data
+
+Example:
+
+User clicks Odisha
+
+Graph instantly changes:
+
+Pending cases in Odisha
+District breakdown
+Monthly trend
+
+That feels “alive”.
+
+
+design an interactive dashboard where cases all over the india can be accesseed and also make sure the a state shows a the number of cases that are pending, the cases which are running and the cases that are rergistered within a week.
+

@@ -1,0 +1,43 @@
+nyayasetu/                          ← root of the repo
+│
+├── artifacts/                      ← DEPLOYABLE APPS
+│   ├── api-server/                 ← BACKEND (Express 5 + Node.js)
+│   │   └── src/
+│   │       ├── app.ts              ← Express setup, CORS, logging
+│   │       ├── index.ts            ← starts the server (reads PORT)
+│   │       └── routes/
+│   │           ├── health.ts       ← GET /api/healthz
+│   │           ├── judicial.ts     ← all dashboard data endpoints
+│   │           └── openai/
+│   │               └── index.ts   ← AI chat + SSE streaming
+│   │
+│   └── nyayasetu/                  ← FRONTEND (React + Vite)
+│       └── src/
+│           ├── App.tsx             ← router + React Query provider
+│           ├── pages/
+│           │   ├── Dashboard.tsx   ← national stats + charts
+│           │   ├── StateDetail.tsx ← district drill-down
+│           │   └── Chatbot.tsx     ← AI legal assistant UI
+│           └── components/
+│               ├── Layout.tsx      ← nav bar + footer
+│               └── StateGrid.tsx   ← color-coded state cards
+│
+├── lib/                            ← SHARED LIBRARIES
+│   ├── api-spec/
+│   │   └── openapi.yaml           ← ★ single source of truth for ALL APIs
+│   ├── api-client-react/           ← auto-generated React Query hooks
+│   ├── api-zod/                    ← auto-generated Zod validation schemas
+│   ├── db/                         ← DATABASE
+│   │   └── src/schema/
+│   │       ├── judicial.ts         ← state_stats, district_stats, trends…
+│   │       ├── conversations.ts    ← AI chat conversations
+│   │       └── messages.ts        ← AI chat messages
+│   └── integrations-openai-*/      ← OpenAI SDK wrapper (server + React)
+│
+├── scripts/
+│   └── src/seed.ts                 ← populates DB with NJDG-style data
+│
+├── package.json                    ← root — shared tooling (TypeScript, Prettier)
+├── pnpm-workspace.yaml             ← workspace definition + dependency catalog
+├── README.md                       ← full setup guide (just created)
+└── .gitignore                      ← excludes node_modules, dist, .env, secrets
