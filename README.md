@@ -119,7 +119,7 @@ nyayasetu/
 | Frontend | React 19, Vite, Tailwind CSS, shadcn/ui, Recharts, Framer Motion, Wouter |
 | Backend | Node.js 24, Express 5, TypeScript, pino logging |
 | Database | PostgreSQL + Drizzle ORM |
-| AI | OpenAI GPT (streaming SSE) |
+| AI | Grok AI (streaming SSE) |
 | API Contract | OpenAPI 3.1 → code-generated hooks (Orval) + Zod schemas |
 | Package manager | pnpm workspaces |
 
@@ -141,9 +141,9 @@ Create a `.env` file at the root (or set these in your hosting platform):
 # PostgreSQL connection string
 DATABASE_URL=postgresql://user:password@localhost:5432/nyayasetu
 
-# OpenAI — use your own key OR the Replit AI Integrations proxy
-AI_INTEGRATIONS_OPENAI_BASE_URL=https://api.openai.com/v1
-AI_INTEGRATIONS_OPENAI_API_KEY=sk-...
+# Grok — use your Grok API key and base URL
+GROQ_BASE_URL=https://api.groq.ai/v1
+GROQ_API_KEY=gsk-...
 
 # Optional — used by the API server
 PORT=8080

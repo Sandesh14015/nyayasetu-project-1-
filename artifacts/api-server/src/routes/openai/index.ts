@@ -9,7 +9,7 @@ import {
   SendOpenaiMessageParams,
   SendOpenaiMessageBody,
 } from "@workspace/api-zod";
-import { isOpenAiConfigured, openai } from "@workspace/integrations-openai-ai-server";
+import { isGrokConfigured, openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -166,9 +166,9 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
     return;
   }
 
-  if (!isOpenAiConfigured) {
+  if (!isGrokConfigured) {
     res.status(503).json({
-      error: "OpenAI integration is not configured. Set AI_INTEGRATIONS_OPENAI_BASE_URL and AI_INTEGRATIONS_OPENAI_API_KEY.",
+      error: "Grok integration is not configured. Set GROQ_BASE_URL and GROQ_API_KEY.",
     });
     return;
   }
@@ -211,12 +211,12 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
 
   let fullResponse = "";
 
-  const stream = await openai.chat.completions.create({
+  const stream = (await openai.chat.completions.create({
     model: "gpt-5.4",
     max_completion_tokens: 8192,
     messages: chatMessages,
     stream: true,
-  });
+  })) as AsyncGenerator<any, void, unknown>;
 
   for await (const chunk of stream) {
     const content = chunk.choices[0]?.delta?.content;

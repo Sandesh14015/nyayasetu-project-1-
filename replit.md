@@ -11,7 +11,7 @@ An AI-powered judicial dashboard and legal assistant for India's Department of J
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
-- Required env: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY` — OpenAI via Replit AI Integrations
+- Required env: `GROQ_BASE_URL`, `GROQ_API_KEY` — Grok AI integration
 
 ## Stack
 
@@ -19,7 +19,7 @@ An AI-powered judicial dashboard and legal assistant for India's Department of J
 - Frontend: React + Vite, Recharts, Framer Motion, Wouter, Tailwind CSS
 - API: Express 5
 - DB: PostgreSQL + Drizzle ORM
-- AI: OpenAI GPT (via Replit AI Integrations) — streaming SSE chat
+- AI: Grok AI — streaming SSE chat
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)

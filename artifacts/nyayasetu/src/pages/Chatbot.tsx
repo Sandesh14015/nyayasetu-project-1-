@@ -218,6 +218,7 @@ function ChatArea({ conversationId }: { conversationId: number }) {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { data: messages, isLoading } = useListOpenaiMessages(conversationId);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -253,7 +254,10 @@ function ChatArea({ conversationId }: { conversationId: number }) {
         body: JSON.stringify({ content: userMessage }),
       });
 
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to send message (${res.status}): ${errorText}`);
+      }
       if (!res.body) throw new Error("No response body");
 
       const reader = res.body.getReader();
@@ -279,6 +283,7 @@ function ChatArea({ conversationId }: { conversationId: number }) {
       }
     } catch (err) {
       console.error(err);
+      setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
       setIsStreaming(false);
       setStreamedContent("");
@@ -312,6 +317,8 @@ function ChatArea({ conversationId }: { conversationId: number }) {
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : errorMessage ? (
+          <div className="text-center py-12 text-destructive text-sm px-4">{errorMessage}</div>
         ) : messages?.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">
             Start typing below to ask a legal question.
