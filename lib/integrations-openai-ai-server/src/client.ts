@@ -1,14 +1,30 @@
 const groqBaseUrl = process.env.GROQ_BASE_URL;
 const groqApiKey = process.env.GROQ_API_KEY;
+const openAiBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+const openAiApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const openAiModel = process.env.AI_INTEGRATIONS_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 export const isGrokConfigured = Boolean(groqBaseUrl && groqApiKey);
-export const isOpenAiConfigured = isGrokConfigured;
+export const isOpenAiConfigured = Boolean(openAiBaseUrl && openAiApiKey);
 
-function buildUrl(path: string) {
-  if (!groqBaseUrl) {
-    throw new Error("GROQ_BASE_URL is not configured.");
+const providerOrder = (process.env.AI_PROVIDER_ORDER || "grok,openai")
+  .split(",")
+  .map((provider) => provider.trim().toLowerCase())
+  .filter((provider): provider is "grok" | "openai" => provider === "grok" || provider === "openai");
+
+function buildUrl(provider: "grok" | "openai", path: string) {
+  if (provider === "grok") {
+    if (!groqBaseUrl) {
+      throw new Error("GROQ_BASE_URL is not configured.");
+    }
+    return `${groqBaseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
   }
-  return `${groqBaseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+
+  if (!openAiBaseUrl) {
+    throw new Error("AI_INTEGRATIONS_OPENAI_BASE_URL or OPENAI_BASE_URL is not configured.");
+  }
+  return `${openAiBaseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 }
 
 function parseEventStreamLine(line: string) {
@@ -27,7 +43,7 @@ function parseEventStreamLine(line: string) {
 
 async function* streamAsyncIterator(response: Response) {
   if (!response.body) {
-    throw new Error("No response body from Groq API.");
+    throw new Error("No response body from AI provider.");
   }
 
   const reader = response.body.getReader();
@@ -55,44 +71,102 @@ async function* streamAsyncIterator(response: Response) {
   }
 }
 
-export const openai = isOpenAiConfigured
-  ? {
-      chat: {
-        completions: {
-          create: async (payload: any) => {
-            const url = buildUrl("chat/completions");
-            const response = await fetch(url, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${groqApiKey}`,
-                "Content-Type": "application/json",
-                Accept: payload.stream ? "text/event-stream" : "application/json",
-              },
-              body: JSON.stringify(payload),
-            });
+function buildProviderHeaders(provider: "grok" | "openai") {
+  if (provider === "grok") {
+    return {
+      Authorization: `Bearer ${groqApiKey}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    };
+  }
 
-            if (!response.ok) {
-              const body = await response.text();
-              throw new Error(`Grok API request failed (${response.status}): ${body}`);
-            }
+  return {
+    Authorization: `Bearer ${openAiApiKey}`,
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
+}
 
-            if (payload.stream) {
-              return streamAsyncIterator(response) as AsyncGenerator<any, void, unknown>;
-            }
+function getConfiguredProviders() {
+  return providerOrder.filter((provider) => {
+    if (provider === "grok") return isGrokConfigured;
+    return isOpenAiConfigured;
+  });
+}
 
-            return response.json();
-          },
-        },
-      },
+async function fetchWithRetries(url: string, init: RequestInit, maxAttempts = 2) {
+  let attempt = 0;
+  let lastError: unknown;
+
+  while (attempt < maxAttempts) {
+    try {
+      const response = await fetch(url, init);
+      return response;
+    } catch (err) {
+      lastError = err;
+      attempt += 1;
+      if (attempt >= maxAttempts) break;
+      const delayMs = 250 * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-  : ({
-      chat: {
-        completions: {
-          create: async () => {
-            throw new Error(
-              "Grok integration is not configured. Set GROQ_BASE_URL and GROQ_API_KEY.",
-            );
-          },
-        },
+  }
+
+  throw lastError;
+}
+
+async function createProviderCompletion(provider: "grok" | "openai", payload: any) {
+  const url = buildUrl(provider, "chat/completions");
+  const headers = buildProviderHeaders(provider);
+  const providerPayload = {
+    ...payload,
+    model: provider === "grok" ? groqModel : openAiModel,
+  };
+  const response = await fetchWithRetries(
+    url,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(providerPayload),
+    },
+    2,
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`${provider === "grok" ? "Grok" : "OpenAI"} API request failed (${response.status}): ${body}`);
+  }
+
+  if (providerPayload.stream) {
+    return streamAsyncIterator(response) as AsyncGenerator<any, void, unknown>;
+  }
+
+  return response.json();
+}
+
+export const openai = {
+  chat: {
+    completions: {
+      create: async (payload: any) => {
+        const providers = getConfiguredProviders();
+        if (providers.length === 0) {
+          throw new Error(
+            "No AI provider is configured. Set GROQ_BASE_URL/GROQ_API_KEY for Grok or AI_INTEGRATIONS_OPENAI_BASE_URL/AI_INTEGRATIONS_OPENAI_API_KEY for OpenAI.",
+          );
+        }
+
+        const errors: Error[] = [];
+        for (const provider of providers) {
+          try {
+            return await createProviderCompletion(provider, payload);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            errors.push(error);
+            console.warn(`${provider} provider failed:`, error.message);
+          }
+        }
+
+        throw new Error(`All AI providers failed: ${errors.map((e) => e.message).join(" | ")}`);
       },
-    } as const);
+    },
+  },
+};

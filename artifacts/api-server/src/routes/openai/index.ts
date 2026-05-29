@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, conversations, messages } from "@workspace/db";
+import { db, dbConnected, conversations, messages } from "@workspace/db";
 import {
   CreateOpenaiConversationBody,
   GetOpenaiConversationParams,
@@ -9,9 +9,54 @@ import {
   SendOpenaiMessageParams,
   SendOpenaiMessageBody,
 } from "@workspace/api-zod";
-import { isGrokConfigured, openai } from "@workspace/integrations-openai-ai-server";
+import * as integrations from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
+
+const devConversations: Array<{ id: number; title: string; createdAt: string }> = [];
+const devMessages: Array<{
+  id: number;
+  conversationId: number;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}> = [];
+let devNextConversationId = 1;
+let devNextMessageId = 1;
+
+function getDevConversation(id: number) {
+  return devConversations.find((conversation) => conversation.id === id);
+}
+
+function getDevMessages(conversationId: number) {
+  return devMessages
+    .filter((message) => message.conversationId === conversationId)
+    .sort((a, b) => a.id - b.id);
+}
+
+type DevMessageRole = "user" | "assistant";
+
+function createDevConversation(title: string) {
+  const conversation = {
+    id: devNextConversationId++,
+    title,
+    createdAt: new Date().toISOString(),
+  };
+  devConversations.push(conversation);
+  return conversation;
+}
+
+function createDevMessage(conversationId: number, role: DevMessageRole, content: string) {
+  const message = {
+    id: devNextMessageId++,
+    conversationId,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
+  };
+  devMessages.push(message);
+  return message;
+}
 
 const SYSTEM_PROMPT = `You are NyayaSetu AI, an intelligent legal assistant developed for India's Department of Justice. You help citizens understand the Indian judicial system, court procedures, case tracking, legal aid, eFiling, ePay services, and general legal queries.
 
@@ -43,6 +88,11 @@ Always be empathetic, clear, and supportive. Avoid complex legal jargon. Provide
 Important: You represent the Department of Justice and must maintain a professional, trustworthy tone at all times.`;
 
 router.get("/openai/conversations", async (_req, res): Promise<void> => {
+  if (!dbConnected || !db) {
+    res.json(devConversations);
+    return;
+  }
+
   const rows = await db.select().from(conversations).orderBy(conversations.createdAt);
   res.json(
     rows.map((c) => ({
@@ -57,6 +107,12 @@ router.post("/openai/conversations", async (req, res): Promise<void> => {
   const parsed = CreateOpenaiConversationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (!dbConnected || !db) {
+    const conv = createDevConversation(parsed.data.title);
+    res.status(201).json(conv);
     return;
   }
 
@@ -76,6 +132,29 @@ router.get("/openai/conversations/:id", async (req, res): Promise<void> => {
   const params = GetOpenaiConversationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!dbConnected || !db) {
+    const conv = getDevConversation(params.data.id);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const msgs = getDevMessages(params.data.id);
+    res.json({
+      id: conv.id,
+      title: conv.title,
+      createdAt: conv.createdAt,
+      messages: msgs.map((m) => ({
+        id: m.id,
+        conversationId: m.conversationId,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    });
     return;
   }
 
@@ -116,6 +195,24 @@ router.delete("/openai/conversations/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!dbConnected || !db) {
+    const index = devConversations.findIndex((conversation) => conversation.id === params.data.id);
+    if (index === -1) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    devConversations.splice(index, 1);
+    for (let i = devMessages.length - 1; i >= 0; i--) {
+      if (devMessages[i].conversationId === params.data.id) {
+        devMessages.splice(i, 1);
+      }
+    }
+
+    res.sendStatus(204);
+    return;
+  }
+
   const [conv] = await db
     .delete(conversations)
     .where(eq(conversations.id, params.data.id))
@@ -133,6 +230,19 @@ router.get("/openai/conversations/:id/messages", async (req, res): Promise<void>
   const params = ListOpenaiMessagesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!dbConnected || !db) {
+    res.json(
+      getDevMessages(params.data.id).map((m) => ({
+        id: m.id,
+        conversationId: m.conversationId,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    );
     return;
   }
 
@@ -166,17 +276,36 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
     return;
   }
 
-  if (!isGrokConfigured) {
-    res.status(503).json({
-      error: "Grok integration is not configured. Set GROQ_BASE_URL and GROQ_API_KEY.",
-    });
-    return;
+  if (!integrations.isGrokConfigured && !integrations.isOpenAiConfigured) {
+    // Allow a development-only fallback so local dev can continue when no provider is configured.
+    if (process.env.NODE_ENV === "development") {
+      console.warn("No AI provider configured — falling back to development reply.");
+    } else {
+      res.status(503).json({
+        error:
+          "No AI provider is configured. Set GROQ_BASE_URL/GROQ_API_KEY for Grok or AI_INTEGRATIONS_OPENAI_BASE_URL/AI_INTEGRATIONS_OPENAI_API_KEY for OpenAI.",
+      });
+      return;
+    }
   }
 
-  const [conv] = await db
-    .select()
-    .from(conversations)
-    .where(eq(conversations.id, params.data.id));
+  let conv: { id: number; title: string; createdAt: string } | null = null;
+  if (!dbConnected || !db) {
+    conv = getDevConversation(params.data.id) ?? null;
+  } else {
+    const [dbConv] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, params.data.id));
+
+    if (dbConv) {
+      conv = {
+        id: dbConv.id,
+        title: dbConv.title,
+        createdAt: dbConv.createdAt.toISOString(),
+      };
+    }
+  }
 
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
@@ -184,18 +313,24 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
   }
 
   // Save user message
-  await db.insert(messages).values({
-    conversationId: params.data.id,
-    role: "user",
-    content: body.data.content,
-  });
+  if (!dbConnected || !db) {
+    createDevMessage(params.data.id, "user", body.data.content);
+  } else {
+    await db.insert(messages).values({
+      conversationId: params.data.id,
+      role: "user",
+      content: body.data.content,
+    });
+  }
 
   // Get full message history
-  const history = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, params.data.id))
-    .orderBy(messages.createdAt);
+  const history = !dbConnected || !db
+    ? getDevMessages(params.data.id)
+    : await db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, params.data.id))
+        .orderBy(messages.createdAt);
 
   const chatMessages = [
     { role: "system" as const, content: SYSTEM_PROMPT },
@@ -211,27 +346,88 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
 
   let fullResponse = "";
 
-  const stream = (await openai.chat.completions.create({
-    model: "gpt-5.4",
-    max_completion_tokens: 8192,
-    messages: chatMessages,
-    stream: true,
-  })) as AsyncGenerator<any, void, unknown>;
+  let stream: any = null;
 
-  for await (const chunk of stream) {
-    const content = chunk.choices[0]?.delta?.content;
-    if (content) {
-      fullResponse += content;
-      res.write(`data: ${JSON.stringify({ content })}\n\n`);
+  try {
+    stream = await integrations.openai.chat.completions.create({
+      max_completion_tokens: 8192,
+      messages: chatMessages,
+      stream: true,
+    });
+  } catch (err) {
+    console.error("AI integration error:", err);
+    // If we're in development, stream a small fallback reply so the UI remains usable
+    if (process.env.NODE_ENV === "development") {
+      const fallback = "Grok is unreachable — this is a development fallback reply. The real AI integration failed to connect.";
+      console.warn("Using development fallback reply for AI integration failure.");
+      const parts = fallback.match(/.{1,80}/g) || [fallback];
+      for (const part of parts) {
+        fullResponse += part;
+        try {
+          res.write(`data: ${JSON.stringify({ content: part })}\n\n`);
+        } catch (e) {
+          // ignore stream write errors
+        }
+        // small pause to simulate streaming
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      // Save assistant message
+      if (!dbConnected || !db) {
+        createDevMessage(params.data.id, "assistant", fullResponse);
+      } else {
+        await db.insert(messages).values({
+          conversationId: params.data.id,
+          role: "assistant",
+          content: fullResponse,
+        });
+      }
+
+      try {
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      } catch (e) {
+        // ignore
+      }
+      res.end();
+      return;
     }
+
+    // Return a JSON error so client receives structured information instead of HTML
+    res.status(502).json({ error: "AI integration error", details: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+
+  try {
+    for await (const chunk of stream!) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        fullResponse += content;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+  } catch (err) {
+    console.error("AI stream error:", err);
+    // Notify the client the stream failed and end
+    try {
+      res.write(`data: ${JSON.stringify({ done: true, error: err instanceof Error ? err.message : String(err) })}\n\n`);
+    } catch (e) {
+      // ignore write errors
+    }
+    res.end();
+    return;
   }
 
   // Save assistant message
-  await db.insert(messages).values({
-    conversationId: params.data.id,
-    role: "assistant",
-    content: fullResponse,
-  });
+  if (!dbConnected || !db) {
+    createDevMessage(params.data.id, "assistant", fullResponse);
+  } else {
+    await db.insert(messages).values({
+      conversationId: params.data.id,
+      role: "assistant",
+      content: fullResponse,
+    });
+  }
 
   res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
   res.end();

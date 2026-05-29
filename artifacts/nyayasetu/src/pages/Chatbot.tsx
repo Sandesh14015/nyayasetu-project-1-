@@ -262,22 +262,42 @@ function ChatArea({ conversationId }: { conversationId: number }) {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter((line) => line.trim().startsWith("data: "));
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          const dataStr = line.replace("data: ", "").trim();
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+
+          const dataStr = trimmed.replace("data: ", "").trim();
+          if (!dataStr || dataStr === "[DONE]") continue;
+
           try {
             const data = JSON.parse(dataStr);
             if (data.content) setStreamedContent((prev) => prev + data.content);
             if (data.done) queryClient.invalidateQueries({ queryKey: getListOpenaiMessagesQueryKey(conversationId) });
           } catch {
             // ignore parse errors on incomplete chunks
+          }
+        }
+      }
+
+      if (buffer.trim().startsWith("data: ")) {
+        const dataStr = buffer.trim().replace("data: ", "").trim();
+        if (dataStr && dataStr !== "[DONE]") {
+          try {
+            const data = JSON.parse(dataStr);
+            if (data.content) setStreamedContent((prev) => prev + data.content);
+            if (data.done) queryClient.invalidateQueries({ queryKey: getListOpenaiMessagesQueryKey(conversationId) });
+          } catch {
+            // ignore any remaining incomplete chunk
           }
         }
       }
