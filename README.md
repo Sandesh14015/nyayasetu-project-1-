@@ -158,7 +158,7 @@ NODE_ENV=development
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/your-username/nyayasetu.git
+git clone https://github.com/Sandesh14015/nyayasetu-project-1.git
 cd nyayasetu
 
 # 2. Install dependencies
